@@ -12,8 +12,7 @@
   //  - Android custom scheme: 'backstage://home'
   //  - iOS custom scheme: 'backstage://home'
   //  - Universal link: 'https://your.app.link/path'
-  const ANDROID_APP_LINK = '';
-  const IOS_APP_LINK = '';
+  // Provide app links via options when calling redirectToAppStores
 
   function detectPlatform() {
     const ua = navigator.userAgent || '';
@@ -22,27 +21,54 @@
     return { isAndroid, isIOS };
   }
 
-  function openWithFastFallback(deepLink, webLink) {
+  function openWithFastFallback(deepLink, webLink, fallbackDelayMs = 1500) {
     let fallbackId = null;
-    let didHide = false;
+    let didHideOrUnload = false;
+
+    const cancelFallback = () => {
+      didHideOrUnload = true;
+      if (fallbackId) clearTimeout(fallbackId);
+    };
 
     const onVisibility = () => {
-      if (document.hidden) {
-        didHide = true;
-        if (fallbackId) clearTimeout(fallbackId);
-      }
+      if (document.hidden || document.visibilityState === 'hidden') cancelFallback();
     };
+    const onPageHide = () => cancelFallback();
+    const onBlur = () => cancelFallback();
+
     document.addEventListener('visibilitychange', onVisibility, { once: true });
+    window.addEventListener('pagehide', onPageHide, { once: true });
+    window.addEventListener('blur', onBlur, { once: true });
 
     fallbackId = setTimeout(() => {
-      if (!didHide) window.location.replace(webLink);
-    }, 900);
+      if (!didHideOrUnload) window.location.replace(webLink);
+    }, fallbackDelayMs);
 
     try {
       window.location.replace(deepLink);
     } catch (_) {
-      if (fallbackId) clearTimeout(fallbackId);
+      cancelFallback();
       window.location.replace(webLink);
+    }
+  }
+
+  // Build Android intent URL with in-URL fallback to avoid timer flicker
+  function buildAndroidIntentUrl(appLink, packageName, fallbackWebUrl) {
+    try {
+      // If already an intent with fallback, return as-is
+      if (/^intent:\/\//i.test(appLink)) {
+        if (/S\.browser_fallback_url=/.test(appLink)) return appLink;
+        // Append fallback before ;end
+        return appLink.replace(/;end$/i, `;S.browser_fallback_url=${encodeURIComponent(fallbackWebUrl)};end`);
+      }
+
+      const u = new URL(appLink);
+      const scheme = (u.protocol || '').replace(':', '') || 'https';
+      const hostAndPath = `${u.host || ''}${u.pathname || ''}${u.search || ''}${u.hash || ''}`;
+      return `intent://${hostAndPath}#Intent;scheme=${scheme};package=${packageName};S.browser_fallback_url=${encodeURIComponent(fallbackWebUrl)};end`;
+    } catch (_e) {
+      // If parsing fails, fall back to market URL handling by caller
+      return '';
     }
   }
 
@@ -66,14 +92,18 @@
 
     const { isAndroid, isIOS } = detectPlatform();
     if (isAndroid) {
-      const appLink = (preferAppLinkFirst && (androidAppLink || ANDROID_APP_LINK)) || null;
-      if (appLink) return openWithFastFallback(appLink, androidWeb);
-      return openWithFastFallback(androidDeep, androidWeb);
+      const appLink = (preferAppLinkFirst && androidAppLink) || '';
+      if (appLink) {
+        const intentUrl = buildAndroidIntentUrl(appLink, androidPackage, androidWeb);
+        if (intentUrl) return openWithFastFallback(intentUrl, androidWeb, 1400);
+        return openWithFastFallback(appLink, androidWeb, 1600);
+      }
+      return openWithFastFallback(androidDeep, androidWeb, 1100);
     }
     if (isIOS) {
-      const appLink = (preferAppLinkFirst && (iosAppLink || IOS_APP_LINK)) || null;
-      if (appLink) return openWithFastFallback(appLink, iosWeb);
-      return openWithFastFallback(iosDeep, iosWeb);
+      const appLink = (preferAppLinkFirst && iosAppLink) || '';
+      if (appLink) return openWithFastFallback(appLink, iosWeb, 1500);
+      return openWithFastFallback(iosDeep, iosWeb, 1100);
     }
   }
 
@@ -93,8 +123,6 @@
       iosAppId: IOS_APP_ID,
       androidWebUrl: ANDROID_WEB_URL,
       iosWebUrl: IOS_WEB_URL,
-      androidAppLink: ANDROID_APP_LINK,
-      iosAppLink: IOS_APP_LINK,
       preferAppLinkFirst: true
     });
   }
