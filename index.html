@@ -64,33 +64,58 @@
             return { isAndroid, isIOS };
         }
 
+        function openWithFastFallback(deepLink, webLink, announceText) {
+            const statusEl = document.getElementById('status');
+            if (statusEl && announceText) statusEl.textContent = announceText;
+
+            let fallbackTimerId = null;
+            let didHide = false;
+
+            // If the page becomes hidden (user switched to store/app), cancel fallback
+            const handleVisibility = () => {
+                if (document.hidden) {
+                    didHide = true;
+                    if (fallbackTimerId) {
+                        clearTimeout(fallbackTimerId);
+                        fallbackTimerId = null;
+                    }
+                }
+            };
+            document.addEventListener('visibilitychange', handleVisibility, { once: false });
+
+            // Schedule a quick web fallback if the deep link didn't take effect
+            fallbackTimerId = setTimeout(() => {
+                if (!didHide) {
+                    window.location.replace(webLink);
+                }
+            }, 900);
+
+            // Attempt deep link immediately and avoid adding to history
+            try {
+                window.location.replace(deepLink);
+            } catch (e) {
+                // If deep link throws synchronously, go to web immediately
+                if (fallbackTimerId) clearTimeout(fallbackTimerId);
+                window.location.replace(webLink);
+            }
+        }
+
         function attemptRedirect() {
             const { isAndroid, isIOS } = detectPlatform();
-            const statusEl = document.getElementById('status');
-
-            // Helper to update UX while redirecting
-            function announce(message) {
-                if (statusEl) statusEl.textContent = message;
-            }
 
             if (isIOS) {
-                announce('Opening App Store...');
-                // Try deep link first, then fallback to web
-                setTimeout(() => { window.location.href = iosDeepLink; }, 400);
-                setTimeout(() => { window.location.href = iosWebLink; }, 1400);
+                openWithFastFallback(iosDeepLink, iosWebLink, 'Opening App Store...');
                 return;
             }
 
             if (isAndroid) {
-                announce('Opening Google Play...');
-                // Try deep link first, then fallback to web
-                setTimeout(() => { window.location.href = androidDeepLink; }, 400);
-                setTimeout(() => { window.location.href = androidWebLink; }, 1400);
+                openWithFastFallback(androidDeepLink, androidWebLink, 'Opening Google Play...');
                 return;
             }
 
             // Desktop or unknown device
-            announce('Choose your platform to download:');
+            const statusEl = document.getElementById('status');
+            if (statusEl) statusEl.textContent = 'Choose your platform to download:';
         }
 
         document.addEventListener('DOMContentLoaded', attemptRedirect);
