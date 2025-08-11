@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download Zoho Backstage For Attendees</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            text-align: center; 
+            padding: 50px; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .container { 
+            max-width: 420px; 
+            margin: 0 auto; 
+            background: rgba(255,255,255,0.1);
+            padding: 30px;
+            border-radius: 15px;
+        }
+        .download-btn {
+            display: inline-block;
+            padding: 15px 30px;
+            background: #fff;
+            color: #333;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: bold;
+            margin: 10px;
+        }
+        .hint { opacity: 0.9; font-size: 14px; }
+    </style>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <link rel="canonical" href="https://pauldavidson-j-16477.github.io/dynamic-qr-gen/" />
+    <meta name="robots" content="noindex" />
+    <noscript>
+        <style>
+            #status { display: none; }
+        </style>
+    </noscript>
+    <script>
+        // Configuration for Zoho Backstage For Attendees
+        const playPackageName = 'com.zoho.backstage';
+        const appStoreId = '1324912655';
+
+        // Deep links (open store apps directly) and web fallbacks
+        const androidDeepLink = `market://details?id=${playPackageName}`;
+        const androidWebLink = `https://play.google.com/store/apps/details?id=${playPackageName}`;
+        const iosDeepLink = `itms-apps://itunes.apple.com/app/id${appStoreId}`;
+        const iosWebLink = `https://apps.apple.com/in/app/zoho-backstage-for-attendees/id${appStoreId}`;
+
+        function detectPlatform() {
+            const ua = navigator.userAgent || '';
+            const isAndroid = /android/i.test(ua);
+            // iPadOS 13+ may report as Mac; detect via touch points
+            const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            return { isAndroid, isIOS };
+        }
+
+        function attemptRedirect() {
+            const { isAndroid, isIOS } = detectPlatform();
+            const statusEl = document.getElementById('status');
+
+            // Helper to update UX while redirecting
+            function announce(message) {
+                if (statusEl) statusEl.textContent = message;
+            }
+
+            if (isIOS) {
+                announce('Opening App Store...');
+                // Try deep link first, then fallback to web
+                setTimeout(() => { window.location.href = iosDeepLink; }, 400);
+                setTimeout(() => { window.location.href = iosWebLink; }, 1400);
+                return;
+            }
+
+            if (isAndroid) {
+                announce('Opening Google Play...');
+                // Try deep link first, then fallback to web
+                setTimeout(() => { window.location.href = androidDeepLink; }, 400);
+                setTimeout(() => { window.location.href = androidWebLink; }, 1400);
+                return;
+            }
+
+            // Desktop or unknown device
+            announce('Choose your platform to download:');
+        }
+
+        document.addEventListener('DOMContentLoaded', attemptRedirect);
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>📱 Download Zoho Backstage For Attendees</h1>
+        <div id="status">Redirecting to your app store...</div>
+        <p class="hint">If you're not redirected automatically, select your platform:</p>
+        <a href="https://play.google.com/store/apps/details?id=com.zoho.backstage" class="download-btn">Google Play</a>
+        <a href="https://apps.apple.com/in/app/zoho-backstage-for-attendees/id1324912655" class="download-btn">App Store</a>
+    </div>
+</body>
+</html>
+
+
