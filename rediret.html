@@ -5,6 +5,15 @@
   const ANDROID_WEB_URL = `https://play.google.com/store/apps/details?id=${ANDROID_PACKAGE}`;
   const IOS_WEB_URL = `https://apps.apple.com/in/app/zoho-backstage-for-attendees/id${IOS_APP_ID}`;
   const HASH_TRIGGER = '#/qrcode';
+  // Optional: direct app links (custom scheme / universal link / Android intent)
+  // Set these if the app supports opening directly (preferred when installed)
+  // Examples:
+  //  - Android intent: 'intent://home#Intent;scheme=backstage;package=com.zoho.backstage;end'
+  //  - Android custom scheme: 'backstage://home'
+  //  - iOS custom scheme: 'backstage://home'
+  //  - Universal link: 'https://your.app.link/path'
+  const ANDROID_APP_LINK = '';
+  const IOS_APP_LINK = '';
 
   function detectPlatform() {
     const ua = navigator.userAgent || '';
@@ -42,7 +51,10 @@
       androidPackage,
       iosAppId,
       androidWebUrl,
-      iosWebUrl
+      iosWebUrl,
+      androidAppLink,
+      iosAppLink,
+      preferAppLinkFirst = true
     } = options || {};
 
     if (!androidPackage || !iosAppId) return;
@@ -53,8 +65,16 @@
     const iosWeb = iosWebUrl || `https://apps.apple.com/app/id${iosAppId}`;
 
     const { isAndroid, isIOS } = detectPlatform();
-    if (isAndroid) return openWithFastFallback(androidDeep, androidWeb);
-    if (isIOS) return openWithFastFallback(iosDeep, iosWeb);
+    if (isAndroid) {
+      const appLink = (preferAppLinkFirst && (androidAppLink || ANDROID_APP_LINK)) || null;
+      if (appLink) return openWithFastFallback(appLink, androidWeb);
+      return openWithFastFallback(androidDeep, androidWeb);
+    }
+    if (isIOS) {
+      const appLink = (preferAppLinkFirst && (iosAppLink || IOS_APP_LINK)) || null;
+      if (appLink) return openWithFastFallback(appLink, iosWeb);
+      return openWithFastFallback(iosDeep, iosWeb);
+    }
   }
 
   function shouldTrigger() {
@@ -72,7 +92,10 @@
       androidPackage: ANDROID_PACKAGE,
       iosAppId: IOS_APP_ID,
       androidWebUrl: ANDROID_WEB_URL,
-      iosWebUrl: IOS_WEB_URL
+      iosWebUrl: IOS_WEB_URL,
+      androidAppLink: ANDROID_APP_LINK,
+      iosAppLink: IOS_APP_LINK,
+      preferAppLinkFirst: true
     });
   }
 
