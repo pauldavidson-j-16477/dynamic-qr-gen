@@ -5,14 +5,15 @@
   const ANDROID_WEB_URL = `https://play.google.com/store/apps/details?id=${ANDROID_PACKAGE}`;
   const IOS_WEB_URL = `https://apps.apple.com/in/app/zoho-backstage-for-attendees/id${IOS_APP_ID}`;
   const HASH_TRIGGER = '#/qrcode';
-  // Optional: direct app links (custom scheme / universal link / Android intent)
-  // Set these if the app supports opening directly (preferred when installed)
-  // Examples:
-  //  - Android intent: 'intent://home#Intent;scheme=backstage;package=com.zoho.backstage;end'
-  //  - Android custom scheme: 'backstage://home'
-  //  - iOS custom scheme: 'backstage://home'
-  //  - Universal link: 'https://your.app.link/path'
-  // Provide app links via options when calling redirectToAppStores
+  // Detect if opened from the mobile app; guard require for non-module envs
+  let IS_FROM_APP = false;
+  try {
+    const mod = (typeof require === 'function') ? require('commons/services/mobile-service') : null;
+    const candidate = mod && (mod.default ? mod.default.prototype?.isFromApp : mod.prototype?.isFromApp);
+    IS_FROM_APP = typeof candidate === 'function' ? !!candidate() : !!candidate;
+  } catch (_e) {
+    IS_FROM_APP = false;
+  }
 
   function detectPlatform() {
     const ua = navigator.userAgent || '';
@@ -21,54 +22,27 @@
     return { isAndroid, isIOS };
   }
 
-  function openWithFastFallback(deepLink, webLink, fallbackDelayMs = 1500) {
+  function openWithFastFallback(deepLink, webLink) {
     let fallbackId = null;
-    let didHideOrUnload = false;
-
-    const cancelFallback = () => {
-      didHideOrUnload = true;
-      if (fallbackId) clearTimeout(fallbackId);
-    };
+    let didHide = false;
 
     const onVisibility = () => {
-      if (document.hidden || document.visibilityState === 'hidden') cancelFallback();
+      if (document.hidden) {
+        didHide = true;
+        if (fallbackId) clearTimeout(fallbackId);
+      }
     };
-    const onPageHide = () => cancelFallback();
-    const onBlur = () => cancelFallback();
-
     document.addEventListener('visibilitychange', onVisibility, { once: true });
-    window.addEventListener('pagehide', onPageHide, { once: true });
-    window.addEventListener('blur', onBlur, { once: true });
 
     fallbackId = setTimeout(() => {
-      if (!didHideOrUnload) window.location.replace(webLink);
-    }, fallbackDelayMs);
+      if (!didHide) window.location.replace(webLink);
+    }, 900);
 
     try {
       window.location.replace(deepLink);
     } catch (_) {
-      cancelFallback();
+      if (fallbackId) clearTimeout(fallbackId);
       window.location.replace(webLink);
-    }
-  }
-
-  // Build Android intent URL with in-URL fallback to avoid timer flicker
-  function buildAndroidIntentUrl(appLink, packageName, fallbackWebUrl) {
-    try {
-      // If already an intent with fallback, return as-is
-      if (/^intent:\/\//i.test(appLink)) {
-        if (/S\.browser_fallback_url=/.test(appLink)) return appLink;
-        // Append fallback before ;end
-        return appLink.replace(/;end$/i, `;S.browser_fallback_url=${encodeURIComponent(fallbackWebUrl)};end`);
-      }
-
-      const u = new URL(appLink);
-      const scheme = (u.protocol || '').replace(':', '') || 'https';
-      const hostAndPath = `${u.host || ''}${u.pathname || ''}${u.search || ''}${u.hash || ''}`;
-      return `intent://${hostAndPath}#Intent;scheme=${scheme};package=${packageName};S.browser_fallback_url=${encodeURIComponent(fallbackWebUrl)};end`;
-    } catch (_e) {
-      // If parsing fails, fall back to market URL handling by caller
-      return '';
     }
   }
 
@@ -77,10 +51,7 @@
       androidPackage,
       iosAppId,
       androidWebUrl,
-      iosWebUrl,
-      androidAppLink,
-      iosAppLink,
-      preferAppLinkFirst = true
+      iosWebUrl
     } = options || {};
 
     if (!androidPackage || !iosAppId) return;
@@ -91,20 +62,8 @@
     const iosWeb = iosWebUrl || `https://apps.apple.com/app/id${iosAppId}`;
 
     const { isAndroid, isIOS } = detectPlatform();
-    if (isAndroid) {
-      const appLink = (preferAppLinkFirst && androidAppLink) || '';
-      if (appLink) {
-        const intentUrl = buildAndroidIntentUrl(appLink, androidPackage, androidWeb);
-        if (intentUrl) return openWithFastFallback(intentUrl, androidWeb, 1400);
-        return openWithFastFallback(appLink, androidWeb, 1600);
-      }
-      return openWithFastFallback(androidDeep, androidWeb, 1100);
-    }
-    if (isIOS) {
-      const appLink = (preferAppLinkFirst && iosAppLink) || '';
-      if (appLink) return openWithFastFallback(appLink, iosWeb, 1500);
-      return openWithFastFallback(iosDeep, iosWeb, 1100);
-    }
+    if (isAndroid) return openWithFastFallback(androidDeep, androidWeb);
+    if (isIOS) return openWithFastFallback(iosDeep, iosWeb);
   }
 
   function shouldTrigger() {
@@ -117,13 +76,23 @@
   function maybeRedirect() {
     if (hasRedirected) return;
     if (!shouldTrigger()) return;
+    // If opened from app, route to home (remove /qrcode) and do not open stores
+    if (IS_FROM_APP) {
+      hasRedirected = true;
+      // Replace #/qrcode (and any query) with # to land on home without adding history
+      const newUrl = window.location.href.replace(/#\/qrcode(?:\?.*)?$/, '#');
+      if (newUrl !== window.location.href) {
+        try { history.replaceState(null, '', newUrl); } catch (_err) { window.location.replace(newUrl); }
+      }
+      return;
+    }
+    // External context: proceed with store redirection
     hasRedirected = true;
     redirectToAppStores({
       androidPackage: ANDROID_PACKAGE,
       iosAppId: IOS_APP_ID,
       androidWebUrl: ANDROID_WEB_URL,
-      iosWebUrl: IOS_WEB_URL,
-      preferAppLinkFirst: true
+      iosWebUrl: IOS_WEB_URL
     });
   }
 
