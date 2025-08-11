@@ -1,0 +1,90 @@
+<script>
+(function () {
+  const ANDROID_PACKAGE = 'com.zoho.backstage';
+  const IOS_APP_ID = '1324912655';
+  const ANDROID_WEB_URL = `https://play.google.com/store/apps/details?id=${ANDROID_PACKAGE}`;
+  const IOS_WEB_URL = `https://apps.apple.com/in/app/zoho-backstage-for-attendees/id${IOS_APP_ID}`;
+  const HASH_TRIGGER = '#/qrcode';
+
+  function detectPlatform() {
+    const ua = navigator.userAgent || '';
+    const isAndroid = /android/i.test(ua);
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    return { isAndroid, isIOS };
+  }
+
+  function openWithFastFallback(deepLink, webLink) {
+    let fallbackId = null;
+    let didHide = false;
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        didHide = true;
+        if (fallbackId) clearTimeout(fallbackId);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility, { once: true });
+
+    fallbackId = setTimeout(() => {
+      if (!didHide) window.location.replace(webLink);
+    }, 900);
+
+    try {
+      window.location.replace(deepLink);
+    } catch (_) {
+      if (fallbackId) clearTimeout(fallbackId);
+      window.location.replace(webLink);
+    }
+  }
+
+  function redirectToAppStores(options) {
+    const {
+      androidPackage,
+      iosAppId,
+      androidWebUrl,
+      iosWebUrl
+    } = options || {};
+
+    if (!androidPackage || !iosAppId) return;
+
+    const androidDeep = `market://details?id=${androidPackage}`;
+    const iosDeep = `itms-apps://itunes.apple.com/app/id${iosAppId}`;
+    const androidWeb = androidWebUrl || `https://play.google.com/store/apps/details?id=${androidPackage}`;
+    const iosWeb = iosWebUrl || `https://apps.apple.com/app/id${iosAppId}`;
+
+    const { isAndroid, isIOS } = detectPlatform();
+    if (isAndroid) return openWithFastFallback(androidDeep, androidWeb);
+    if (isIOS) return openWithFastFallback(iosDeep, iosWeb);
+  }
+
+  function shouldTrigger() {
+    const hash = window.location.hash || '';
+    const hashPath = hash.split('?')[0];
+    return hashPath === HASH_TRIGGER;
+  }
+
+  let hasRedirected = false;
+  function maybeRedirect() {
+    if (hasRedirected) return;
+    if (!shouldTrigger()) return;
+    hasRedirected = true;
+    redirectToAppStores({
+      androidPackage: ANDROID_PACKAGE,
+      iosAppId: IOS_APP_ID,
+      androidWebUrl: ANDROID_WEB_URL,
+      iosWebUrl: IOS_WEB_URL
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', maybeRedirect);
+  } else {
+    maybeRedirect();
+  }
+  window.addEventListener('hashchange', maybeRedirect);
+
+  window.redirectToAppStores = window.redirectToAppStores || redirectToAppStores;
+})();
+</script>
+
+
